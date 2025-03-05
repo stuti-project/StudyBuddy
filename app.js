@@ -7,7 +7,6 @@ app.use(express.json());
 app.use(express.urlencoded({extended:false}));
 
 dbConnect();
-
 const userRouter = require('./routes/userRoutes');
 app.use("/user",userRouter);
 

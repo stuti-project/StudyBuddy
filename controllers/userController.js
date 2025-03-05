@@ -7,6 +7,13 @@ const jwt = require('jsonwebtoken');
 const userRegistration = async (req, res) => {
     try {
         const { FullName, UserName, Email, Password, ConfirmPassword, Country, State, EducationLevel, Subject, StudyGoals } = req.body;
+        
+        // Check if user already exists
+        const existingUser = await User.findOne({ Email });
+        if (existingUser) {
+            return res.status(400).json({ message: "Email already in use" });
+        }
+
         const hashedPassword = await bcrypt.hash(Password, 10);
 
         // Check if a file was uploaded
@@ -27,6 +34,11 @@ const userRegistration = async (req, res) => {
         });
 
         await newUser.save();
+
+        // Generate JWT Token
+        const token = jwt.sign({ _id: newUser._id }, process.env.JWT_SECRET, { expiresIn: "1d" });
+        res.cookie("token", token, { httpOnly: true }); // Secure cookie
+
         return res.status(200).json({ message: "Success", user: newUser });
 
     } catch (error) {
@@ -42,16 +54,16 @@ const userLogin = async (req, res) => {
         if (!userFound) {
             return res.status(400).json({ "mesage": "Invalid email or pwd" });
         }
-        // console.log(userFound);
+        
         const pwdMatch = await bcrypt.compare(Password, userFound.Password);
-        // console.log(pwdMatch)
+      
         if (!pwdMatch) {
             return res.status(400).json({ "mesage": "Invalid email or pwd" });
         }
 
         const token = jwt.sign({ _id: userFound._id  }, process.env.jwt_secret, { expiresIn: "1d" });
 
-        res.cookie("token", token);
+        res.cookie("token", token, { httpOnly: true }); // Secure cookie
         return res.status(200).json({ "messgae": "login success" });
 
     } catch (error) {
