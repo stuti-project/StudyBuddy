@@ -40,5 +40,8 @@ Thumbs.db
 coverage/
 .nyc_output/
 
+# Ignore uploads/images folder
+uploads/images/
 
+# Ignore package-lock.json
 package-lock.json
