@@ -2,7 +2,7 @@ const express = require("express");
 const router = express.Router();
 const multer = require("multer");
 const path = require("path");
-const { userRegistration,userLogin } = require("../controllers/userController");
+const { userRegistration,userLogin,sendResetCode, verifyResetCode, resetPassword} = require("../controllers/userController");
 
 const storage = multer.diskStorage({
     destination: function (req, file, cb) {
@@ -17,5 +17,8 @@ const upload = multer({ storage: storage });
 
 router.post('/reg', upload.single("ProfilePicture"), userRegistration);
 router.post('/login',userLogin);
+router.post('/send-reset-code', sendResetCode);
+router.post('/verify-reset-code', verifyResetCode);
+router.post('/reset-password', resetPassword);
 
 module.exports = router;
