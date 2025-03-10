@@ -7,16 +7,17 @@ const crypto = require("crypto");
 
 let resetCodes = {}; // Store reset codes in memory (temporary)
 
+console.log("EMAIL_USER:", process.env.EMAIL_USER);
+console.log("EMAIL_PASS:", process.env.EMAIL_PASS ? "Loaded" : "Not Loaded");
+
 const transporter = nodemailer.createTransport({
-    host: 'smtp.ethereal.email',
-    port: 587,
-    secure: false, // Use STARTTLS
+    service: 'gmail',
     auth: {
         user: process.env.EMAIL_USER,
         pass: process.env.EMAIL_PASS
     },
     tls: {
-        rejectUnauthorized: false // ✅ Allow self-signed certificates
+        rejectUnauthorized: false // ✅ Ignore self-signed certificates
     }
 });
 
