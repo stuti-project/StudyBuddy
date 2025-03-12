@@ -65,7 +65,12 @@ const userLogin = async (req, res) => {
 
         const token = jwt.sign({ _id: userFound._id }, process.env.JWT_SECRET, { expiresIn: "1d" });
 
-        return res.status(200).json({ message: "Login success", token, user: userFound });
+        return res.status(200).json({ message: "Login success", 
+            token,
+            user: {
+                ProfilePicture: userFound.ProfilePicture,
+                UserName: userFound.UserName
+            }});
 
     } catch (error) {
         console.error(error);
