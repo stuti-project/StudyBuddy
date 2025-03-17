@@ -26,6 +26,10 @@ const userRegistration = async (req, res) => {
     try {
         const { FullName, UserName, Email, Password, ConfirmPassword, Country, State, EducationLevel, Subject, StudyGoals } = req.body;
 
+        if (Password !== ConfirmPassword) {
+            return res.status(400).json({ message: "Passwords do not match" });
+        }
+
         const existingUser = await User.findOne({ Email });
         if (existingUser) {
             return res.status(400).json({ message: "Email already in use" });
@@ -35,7 +39,7 @@ const userRegistration = async (req, res) => {
         const ProfilePicture = req.file ? `uploads/images/${req.file.filename}` : null;
 
         const newUser = new User({
-            ProfilePicture, FullName, UserName, Email, Password: hashedPassword, ConfirmPassword, Country, State, EducationLevel, Subject, StudyGoals
+            ProfilePicture, FullName, UserName, Email, Password: hashedPassword, Country, State, EducationLevel, Subject, StudyGoals
         });
 
         await newUser.save();
@@ -54,6 +58,7 @@ const userLogin = async (req, res) => {
     try {
         const { Email, Password } = req.body;
         const userFound = await User.findOne({ Email });
+
         if (!userFound) {
             return res.status(400).json({ message: "Invalid email or password" });
         }
@@ -65,12 +70,11 @@ const userLogin = async (req, res) => {
 
         const token = jwt.sign({ _id: userFound._id }, process.env.JWT_SECRET, { expiresIn: "1d" });
 
-        return res.status(200).json({ message: "Login success", 
+        return res.status(200).json({
+            message: "Login success",
             token,
-            user: {
-                ProfilePicture: userFound.ProfilePicture,
-                UserName: userFound.UserName
-            }});
+            user: userFound
+        });
 
     } catch (error) {
         console.error(error);
@@ -154,4 +158,26 @@ const resetPassword = async (req, res) => {
     }
 };
 
-module.exports = { userRegistration, userLogin, sendResetCode, verifyResetCode, resetPassword };
+const getalldata = async (req, res) => {
+    const token = req.headers.authorization?.split(' ')[1]; // Extract token from 'Bearer <token>'
+
+    if (!token) {
+        return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    try {
+        const decodedToken = jwt.verify(token, process.env.JWT_SECRET); // Decode token to get user ID
+        const user = await User.findById(decodedToken._id);  // Correctly fetch user data
+
+        if (!user) {
+            return res.status(404).json({ message: "User not found" });
+        }
+
+        res.status(200).json(user);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: "Error fetching user details" });
+    }
+};
+
+module.exports = { userRegistration, userLogin, sendResetCode, verifyResetCode, resetPassword , getalldata };
