@@ -17,10 +17,17 @@ app.use(express.json());
 app.use(express.urlencoded({extended:false}));
 
 dbConnect();
-const userRouter = require('./routes/userRoutes');
-app.use("/user",userRouter);
+// Import Routes
+const userRouter = require("./routes/userRoutes");
+const flashcardRoutes = require("./routes/flashcardRoutes");
+const todoRoutes = require("./routes/todoRoutes");
+
+app.use("/user", userRouter);
+app.use("/user", flashcardRoutes);
+app.use("/user", todoRoutes);
 
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
 
 const port = process.env.PORT;
 

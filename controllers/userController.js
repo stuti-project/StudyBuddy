@@ -44,8 +44,12 @@ const userRegistration = async (req, res) => {
 
         await newUser.save();
 
-        const token = jwt.sign({ _id: newUser._id }, process.env.JWT_SECRET, { expiresIn: "1d" });
-
+        const token = jwt.sign(
+            { _id: newUser._id, email: newUser.Email },  // ✅ Added `email`
+            process.env.JWT_SECRET,
+            { expiresIn: "1d" }
+        );
+        
         return res.status(200).json({ message: "Success", token, user: newUser });
 
     } catch (error) {
@@ -68,7 +72,11 @@ const userLogin = async (req, res) => {
             return res.status(400).json({ message: "Invalid email or password" });
         }
 
-        const token = jwt.sign({ _id: userFound._id }, process.env.JWT_SECRET, { expiresIn: "1d" });
+        const token = jwt.sign(
+            { _id: userFound._id, email: userFound.Email },  // ✅ Added `email`
+            process.env.JWT_SECRET,
+            { expiresIn: "1d" }
+        );
 
         return res.status(200).json({
             message: "Login success",
