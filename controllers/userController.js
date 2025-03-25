@@ -188,4 +188,21 @@ const getalldata = async (req, res) => {
     }
 };
 
-module.exports = { userRegistration, userLogin, sendResetCode, verifyResetCode, resetPassword , getalldata };
+// Search users based on Subject, Education Level, and Country
+const searchUsers = async (req, res) => {
+    try {
+        const { EducationLevel, Subject, Country } = req.query;
+        let query = {};
+
+        if (EducationLevel) query.EducationLevel = { $regex: EducationLevel, $options: "i" };
+        if (Subject) query.Subject = { $regex: Subject, $options: "i" };
+        if (Country) query.Country = { $regex: Country, $options: "i" };
+
+        const users = await User.find(query);
+        res.json(users);
+    } catch (error) {
+        res.status(500).json({ error: "Server Error" });
+    }
+  };
+
+module.exports = { userRegistration, userLogin, sendResetCode, verifyResetCode, resetPassword , getalldata,searchUsers  };
