@@ -1,10 +1,11 @@
 const mongoose = require('mongoose');
 
 const flashcardSchema = new mongoose.Schema({
-    topic: { type: String, required: true },  // Topic first
+    topic: { type: String, required: true },
     question: { type: String, required: true },
     answer: { type: String, required: true },
-    notes: { type: String, default: "" }, // Optional notes field
+    image: { type: String, default: "" }, 
+    notes: { type: String, default: "" },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
 }, { timestamps: true });
 
