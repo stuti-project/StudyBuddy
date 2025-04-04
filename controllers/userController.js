@@ -4,6 +4,7 @@ const bcrypt = require("bcryptjs");
 const jwt = require('jsonwebtoken');
 const nodemailer = require('nodemailer');
 const crypto = require("crypto");
+const cloudinary = require('../database/cloudinary');
 
 let resetCodes = {}; // Store reset codes in memory (temporary)
 
@@ -166,6 +167,29 @@ const resetPassword = async (req, res) => {
     }
 };
 
+const updateProfile = async (req, res) => {
+    try {
+      const { ProfilePicture } = req.body;
+      const userId = req.user._id;
+  
+      if (!ProfilePicture) {
+        return res.status(400).json({ message: "Profile pic is required" });
+      }
+  
+      const uploadResponse = await cloudinary.uploader.upload(ProfilePicture);
+      const updatedUser = await User.findByIdAndUpdate(
+        userId,
+        { ProfilePicture: uploadResponse.secure_url },
+        { new: true }
+      );
+  
+      res.status(200).json(updatedUser);
+    } catch (error) {
+      console.log("error in update profile:", error);
+      res.status(500).json({ message: "Internal server error" });
+    }
+  };
+
 const getalldata = async (req, res) => {
     const token = req.headers.authorization?.split(' ')[1]; // Extract token from 'Bearer <token>'
 
@@ -205,4 +229,4 @@ const searchUsers = async (req, res) => {
     }
   };
 
-module.exports = { userRegistration, userLogin, sendResetCode, verifyResetCode, resetPassword , getalldata,searchUsers  };
+module.exports = { userRegistration, userLogin, sendResetCode, verifyResetCode, resetPassword ,updateProfile, getalldata,searchUsers  };
