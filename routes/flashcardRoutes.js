@@ -32,6 +32,7 @@ const upload = multer({ storage, fileFilter });
 
 // Flashcards Routes
 router.post("/flashcards", authMiddleware, upload.single("file"), flashcardController.createFlashcard);
+
 router.get("/flashcards", authMiddleware, flashcardController.getFlashcards);
 router.put("/flashcards/:flashcardId", authMiddleware, upload.single("file"), flashcardController.updateFlashcard);
 router.delete("/flashcards/:flashcardId", authMiddleware, flashcardController.deleteFlashcard);

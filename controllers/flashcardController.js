@@ -12,13 +12,22 @@ const upload = multer({ dest: "uploads/" });
  * @param {string} text - The extracted text from the document.
  * @returns {Array} - List of extracted flashcards with question and answer pairs.
  */
-async function extractQnAUsingAI(text) {
+async function extractQnAUsingAI(text, topic) {
     try {
         const model = genAI.getGenerativeModel({ model: "gemini-1.5-pro-latest" });
-        const prompt = `Extract at least 5 question-answer pairs from the following study material:\n${text}\nFormat: [{"question": "...?", "answer": "..."}]`;
+
+        const prompt = `Extract at least 5 question-answer pairs from the following study material. 
+            If an image is relevant to better understanding, provide a short image description.
+            
+            Format: [{"question": "...?", "answer": "...", "imageDescription": "..."}]
+            
+            Topic: ${topic}
+            Text: ${text}`;
 
         const result = await model.generateContent(prompt);
         const responseText = result.response.text().replace(/```json|```/g, "").trim();
+
+        console.log("Raw AI Response:", responseText);
 
         let flashcards = [];
         try {
@@ -26,15 +35,27 @@ async function extractQnAUsingAI(text) {
             if (!Array.isArray(flashcards)) flashcards = [];
         } catch (error) {
             console.error("Error parsing AI response:", error);
-            flashcards = [];
+            return [];
         }
 
-        return flashcards.filter(card => card.question && card.answer);
+        // Generate images if needed
+        for (const card of flashcards) {
+            if (card.imageDescription) {
+                card.image = await generateImage(card.imageDescription);
+            }
+        }
+
+        return flashcards; // ✅ Return flashcards instead of sending a response
     } catch (error) {
-        console.error("AI Extraction Error:", error);
+        console.error("Backend Error:", error);
         return [];
     }
 }
+
+
+
+
+    
 
 /**
  * Extracts text from a PDF file.
@@ -52,36 +73,6 @@ async function extractTextFromFile(filePath) {
 }
 
 /**
- * Handles file uploads and extracts flashcards using AI.
- */
-module.exports.uploadFlashcards = async (req, res) => {
-    try {
-        if (!req.file) {
-            return res.status(400).json({ error: "No file uploaded." });
-        }
-
-        const filePath = req.file.path;
-        const extractedText = await extractTextFromFile(filePath);
-        fs.unlinkSync(filePath); // Delete file after extraction
-
-        if (!extractedText) {
-            return res.status(400).json({ error: "Could not extract text from file." });
-        }
-
-        const generatedFlashcards = await extractQnAUsingAI(extractedText);
-
-        if (!generatedFlashcards || generatedFlashcards.length < 2) {
-            return res.status(400).json({ error: "AI did not generate enough flashcards." });
-        }
-
-        res.status(201).json({ flashcards: generatedFlashcards });
-    } catch (error) {
-        console.error("Error processing file:", error);
-        res.status(500).json({ error: "Failed to process the file." });
-    }
-};
-
-/**
  * Creates flashcards manually or using AI.
  */
 module.exports.createFlashcard = async (req, res) => {
@@ -90,11 +81,14 @@ module.exports.createFlashcard = async (req, res) => {
     let generatedFlashcards = [];
 
     try {
-        // 📌 Case 1: Manually Adding Flashcards
-        if (req.body.flashcards) {
-            const flashcards = req.body.flashcards.map((card) => ({
+        console.log("Received request body:", req.body); // Debugging
+        console.log("Received file:", req.file);
+
+        // 📌 Case 1: Manual Flashcard Submission (JSON input)
+        if (req.body.flashcards && Array.isArray(req.body.flashcards)) {
+            const flashcards = req.body.flashcards.map(card => ({
                 topic: req.body.topic,
-                notes: req.body.notes, // Add notes
+                notes: req.body.notes,
                 question: card.question,
                 answer: card.answer,
                 image: card.image || null,
@@ -102,14 +96,31 @@ module.exports.createFlashcard = async (req, res) => {
             }));
 
             const savedFlashcards = await Flashcard.insertMany(flashcards);
-
             return res.status(201).json({
                 message: `${savedFlashcards.length} flashcards created successfully!`,
                 flashcards: savedFlashcards,
             });
         }
 
-        // 📌 Case 2: AI-Generated Flashcards from PDF
+        // 📌 Case 2: Text Field for AI-Generated Flashcards (Create from Notes functionality)
+        if (req.body.text) {
+            console.log("Received text for AI generation:", req.body.text);
+
+            // Ensure that the text is not empty or too short.
+            if (!req.body.text.trim()) {
+                return res.status(400).json({ error: "Text is empty." });
+            }
+
+            generatedFlashcards = await extractQnAUsingAI(req.body.text);
+
+            if (!Array.isArray(generatedFlashcards) || generatedFlashcards.length < 2) {
+                return res.status(400).json({ error: "AI did not generate enough flashcards." });
+            }
+
+            return res.status(201).json({ flashcards: generatedFlashcards });
+        }
+
+        // 📌 Case 3: File Upload (PDF for AI-generated flashcards)
         if (req.file) {
             const filePath = req.file.path;
             const fileType = req.file.mimetype;
@@ -125,21 +136,19 @@ module.exports.createFlashcard = async (req, res) => {
                 return res.status(400).json({ error: "Failed to extract text from file." });
             }
 
-            // Generate Flashcards with AI (including images)
             generatedFlashcards = await extractQnAUsingAI(extractedText);
 
             if (!Array.isArray(generatedFlashcards) || generatedFlashcards.length < 2) {
                 return res.status(400).json({ error: "AI did not generate enough flashcards." });
             }
 
-            // Save AI-generated flashcards to the database
             const savedFlashcards = await Flashcard.insertMany(
                 generatedFlashcards.map((card) => ({
                     topic: req.body.topic,
-                    notes: req.body.notes, // Save notes with flashcards
+                    notes: req.body.notes,
                     question: card.question,
                     answer: card.answer,
-                    image: card.image || null, // AI-generated image support
+                    image: card.image || null,
                     createdBy: userId,
                 }))
             );
@@ -158,9 +167,7 @@ module.exports.createFlashcard = async (req, res) => {
     }
 };
 
-/**
- * Retrieves all flashcards for the authenticated user.
- */
+
 module.exports.getFlashcards = async (req, res) => {
     try {
         const flashcards = await Flashcard.find({ createdBy: req.user._id });
@@ -171,9 +178,7 @@ module.exports.getFlashcards = async (req, res) => {
     }
 };
 
-/**
- * Updates an existing flashcard.
- */
+
 module.exports.updateFlashcard = async (req, res) => {
     const { flashcardId } = req.params;
     const { topic, question, answer, notes } = req.body;
@@ -225,7 +230,7 @@ module.exports.deleteFlashcard = async (req, res) => {
         await Flashcard.deleteOne({ _id: flashcardId });
 
         res.json({ message: "Flashcard deleted successfully" });
-    } catch (error) {
+    } catch (error)        {
         console.error("Error deleting flashcard:", error);
         res.status(500).json({ error: error.message });
     }
