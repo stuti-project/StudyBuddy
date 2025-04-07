@@ -1,14 +1,12 @@
 const User = require("../model/reg.js");
 const Message = require("../model/messagemodel.js");
 const cloudinary = require("../database/cloudinary.js");
-const { getReceiverSocketId } = require("../database/socket.js");
+const { getReceiverSocketId, io } = require("../database/socket.js");
 
 const getUsersForSidebar = async (req, res) => {
   try {
     const loggedInUserId = req.user._id;
-    console.log(loggedInUserId);
     const filteredUsers = await User.find({ _id: { $ne: loggedInUserId } }).select("-password");
-    console.log(filteredUsers);
     res.status(200).json(filteredUsers);
   } catch (error) {
     console.error("Error in getUsersForSidebar: ", error.message);
@@ -43,7 +41,6 @@ const sendMessage = async (req, res) => {
 
     let imageUrl;
     if (image) {
-      
       const uploadResponse = await cloudinary.uploader.upload(image);
       imageUrl = uploadResponse.secure_url;
     }
@@ -57,10 +54,10 @@ const sendMessage = async (req, res) => {
 
     await newMessage.save();
 
-    const receiverSocketId=getReceiverSocketId(receiverId);
-    if(receiverSocketId){
-      io.to(receiverSocketId).emit("newMessage",newMessage);
-    } 
+    const receiverSocketId = getReceiverSocketId(receiverId);
+    if (receiverSocketId) {
+      io.to(receiverSocketId).emit("newMessage", newMessage);
+    }
 
     res.status(201).json(newMessage);
   } catch (error) {
@@ -69,4 +66,4 @@ const sendMessage = async (req, res) => {
   }
 };
 
-module.exports={getUsersForSidebar,sendMessage,getMessages};
+module.exports = { getUsersForSidebar, sendMessage, getMessages };
