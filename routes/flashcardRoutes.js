@@ -36,5 +36,7 @@ router.post("/flashcards", authMiddleware, upload.single("file"), flashcardContr
 router.get("/flashcards", authMiddleware, flashcardController.getFlashcards);
 router.put("/flashcards/:flashcardId", authMiddleware, upload.single("file"), flashcardController.updateFlashcard);
 router.delete("/flashcards/:flashcardId", authMiddleware, flashcardController.deleteFlashcard);
+router.get("/user/flashcards", flashcardController.getFlashcards);
+
 
 module.exports = router;

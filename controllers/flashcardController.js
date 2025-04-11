@@ -168,15 +168,36 @@ module.exports.createFlashcard = async (req, res) => {
 };
 
 
+
 module.exports.getFlashcards = async (req, res) => {
+    const { id, topic } = req.query;
+
+    let filter = {};
+
+    if (id) {
+        filter.createdBy = id;
+    }
+
+    if (topic) {
+        filter.topic = { $regex: topic, $options: "i" };
+    }
+
     try {
-        const flashcards = await Flashcard.find({ createdBy: req.user._id });
+        const flashcards = await Flashcard.find(filter);
+
+        if (!flashcards.length) {
+            return res.status(404).json({ message: "No flashcards found for the given filter." });
+        }
+
         res.json({ flashcards });
     } catch (error) {
         console.error("Error fetching flashcards:", error);
         res.status(500).json({ error: "Server error" });
     }
 };
+
+
+
 
 
 module.exports.updateFlashcard = async (req, res) => {
