@@ -37,4 +37,14 @@ router.get("/flashcards", authMiddleware, flashcardController.getFlashcards);
 router.put("/flashcards/:flashcardId", authMiddleware, upload.single("file"), flashcardController.updateFlashcard);
 router.delete("/flashcards/:flashcardId", authMiddleware, flashcardController.deleteFlashcard);
 
+router.get("/flashcards/all", authMiddleware, flashcardController.getAllFlashcardsGrouped);
+
+router.get("/user/flashcards", authMiddleware, flashcardController.getMyFlashcardsGrouped);
+
+
+router.get("/flashcards/all/by-topic", flashcardController.getFlashcardsByTopic);
+
+router.get("/user/flashcards/by-topic", authMiddleware, flashcardController.getFlashcardsByTopic);
+
+
 module.exports = router;

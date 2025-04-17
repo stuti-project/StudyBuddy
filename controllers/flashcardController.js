@@ -72,9 +72,6 @@ async function extractTextFromFile(filePath) {
     }
 }
 
-/**
- * Creates flashcards manually or using AI.
- */
 module.exports.createFlashcard = async (req, res) => {
     const userId = req.user._id;
     let extractedText = "";
@@ -106,7 +103,6 @@ module.exports.createFlashcard = async (req, res) => {
         if (req.body.text) {
             console.log("Received text for AI generation:", req.body.text);
 
-            // Ensure that the text is not empty or too short.
             if (!req.body.text.trim()) {
                 return res.status(400).json({ error: "Text is empty." });
             }
@@ -120,7 +116,7 @@ module.exports.createFlashcard = async (req, res) => {
             return res.status(201).json({ flashcards: generatedFlashcards });
         }
 
-        // 📌 Case 3: File Upload (PDF for AI-generated flashcards)
+      
         if (req.file) {
             const filePath = req.file.path;
             const fileType = req.file.mimetype;
@@ -130,7 +126,7 @@ module.exports.createFlashcard = async (req, res) => {
             }
 
             extractedText = await extractTextFromFile(filePath);
-            fs.unlinkSync(filePath); // Cleanup uploaded file
+            fs.unlinkSync(filePath); 
 
             if (!extractedText) {
                 return res.status(400).json({ error: "Failed to extract text from file." });
@@ -168,9 +164,27 @@ module.exports.createFlashcard = async (req, res) => {
 };
 
 
+
 module.exports.getFlashcards = async (req, res) => {
+    const { id, topic } = req.query;
+
+    let filter = {};
+
+    if (id) {
+        filter.createdBy = id;
+    }
+
+    if (topic) {
+        filter.topic = { $regex: topic, $options: "i" };
+    }
+
     try {
-        const flashcards = await Flashcard.find({ createdBy: req.user._id });
+        const flashcards = await Flashcard.find(filter);
+
+        if (!flashcards.length) {
+            return res.status(404).json({ message: "No flashcards found for the given filter." });
+        }
+
         res.json({ flashcards });
     } catch (error) {
         console.error("Error fetching flashcards:", error);
@@ -178,6 +192,64 @@ module.exports.getFlashcards = async (req, res) => {
     }
 };
 
+
+const groupFlashcardsByTopic = async (filter = {}) => {
+    const flashcards = await Flashcard.find(filter);
+    const grouped = {};
+  
+    for (const card of flashcards) {
+      if (!grouped[card.topic]) grouped[card.topic] = [];
+      grouped[card.topic].push(card);
+    }
+  
+    return grouped;
+  };
+  
+
+  module.exports.getAllFlashcardsGrouped = async (req, res) => {
+    try {
+      const grouped = await groupFlashcardsByTopic();
+      return res.status(200).json({ grouped });
+    } catch (error) {
+      console.error("Error fetching all grouped flashcards:", error);
+      res.status(500).json({ error: "Server error" });
+    }
+  };
+  
+  
+  module.exports.getMyFlashcardsGrouped = async (req, res) => {
+    const userId = req.user._id;
+    try {
+      const grouped = await groupFlashcardsByTopic({ createdBy: userId });
+      return res.status(200).json({ grouped });
+    } catch (error) {
+      console.error("Error fetching user's grouped flashcards:", error);
+      res.status(500).json({ error: "Server error" });
+    }
+  };
+  
+  
+  module.exports.getFlashcardsByTopic = async (req, res) => {
+    const { topic } = req.params;
+    const userId = req.user ? req.user._id : req.query.user; 
+  
+    const filter = {
+      topic: { $regex: topic, $options: "i" },
+    };
+    if (userId) filter.createdBy = userId;
+  
+    try {
+      const flashcards = await Flashcard.find(filter);
+      if (!flashcards.length) {
+        return res.status(404).json({ message: "No flashcards found for this topic." });
+      }
+      res.json({ flashcards });
+    } catch (error) {
+      console.error("Error fetching flashcards by topic:", error);
+      res.status(500).json({ error: "Server error" });
+    }
+  };
+  
 
 module.exports.updateFlashcard = async (req, res) => {
     const { flashcardId } = req.params;
@@ -210,9 +282,7 @@ module.exports.updateFlashcard = async (req, res) => {
     }
 };
 
-/**
- * Deletes a flashcard.
- */
+
 module.exports.deleteFlashcard = async (req, res) => {
     const { flashcardId } = req.params;
 

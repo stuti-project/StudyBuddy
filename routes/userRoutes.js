@@ -2,7 +2,7 @@ const express = require("express");
 const router = express.Router();
 const multer = require("multer");
 const path = require("path");
-const { userRegistration, userLogin, sendResetCode, verifyResetCode, resetPassword,updateProfile,getalldata,searchUsers } = require("../controllers/userController");
+const { userRegistration, userLogin, sendResetCode, verifyResetCode, resetPassword,getalldata,searchUsers,updateUser } = require("../controllers/userController");
 const authMiddleware = require("../middlewares/authMiddleware");
 
 const storage = multer.diskStorage({
@@ -23,7 +23,8 @@ router.post('/verify-reset-code', verifyResetCode);
 router.post('/reset-password', resetPassword);
 router.get('/details',getalldata);
 router.get("/search-users", searchUsers);
+router.put("/update",authMiddleware,upload.single("ProfilePicture"),updateUser);
 
-router.put("/update-profile",authMiddleware,updateProfile);
+// router.put("/update-profile", authMiddleware, upload.single("ProfilePicture"), updateProfile);
 
 module.exports = router;

@@ -167,28 +167,69 @@ const resetPassword = async (req, res) => {
     }
 };
 
-const updateProfile = async (req, res) => {
+// const updateProfile = async (req, res) => {
+//     try {
+//         const userId = req.user._id;
+
+//         let updatedData = req.body;
+
+//         if (req.file) {
+//             const result = await cloudinary.uploader.upload(req.file.path);
+//             updatedData.ProfilePicture = result.secure_url;
+//         }
+
+//         const updatedUser = await User.findByIdAndUpdate(
+//             userId,
+//             { $set: updatedData },
+//             { new: true }
+//         );
+
+//         res.status(200).json({ message: "Profile updated", user: updatedUser });
+//     } catch (error) {
+//         console.error("Profile update error:", error);
+//         res.status(500).json({ message: "Internal server error" });
+//     }
+// };
+
+const updateUser =async (req,res) => {
     try {
-      const { ProfilePicture } = req.body;
-      const userId = req.user._id;
-  
-      if (!ProfilePicture) {
-        return res.status(400).json({ message: "Profile pic is required" });
+        const userId = req.user._id;
+    
+        const {
+          FullName,
+          UserName,
+          Country,
+          State,
+          EducationLevel,
+          Subject,
+          StudyGoals,
+        } = req.body;
+    
+        const updateFields = {
+          FullName,
+          UserName,
+          Country,
+          State,
+          EducationLevel,
+          Subject,
+          StudyGoals,
+        };
+    
+        // If a new profile image is uploaded
+        if (req.file) {
+          updateFields.ProfilePicture = req.file.path;
+        }
+    
+        const updatedUser = await User.findByIdAndUpdate(userId, updateFields, { new: true });
+    
+        if (!updatedUser) return res.status(404).json({ message: "User not found" });
+    
+        res.json({ message: "Profile updated successfully", user: updatedUser });
+      } catch (error) {
+        console.error("Profile update error:", error);
+        res.status(500).json({ message: "Server error" });
       }
-  
-      const uploadResponse = await cloudinary.uploader.upload(ProfilePicture);
-      const updatedUser = await User.findByIdAndUpdate(
-        userId,
-        { ProfilePicture: uploadResponse.secure_url },
-        { new: true }
-      );
-  
-      res.status(200).json(updatedUser);
-    } catch (error) {
-      console.log("error in update profile:", error);
-      res.status(500).json({ message: "Internal server error" });
-    }
-  };
+};
 
 const getalldata = async (req, res) => {
     const token = req.headers.authorization?.split(' ')[1]; // Extract token from 'Bearer <token>'
@@ -229,4 +270,4 @@ const searchUsers = async (req, res) => {
     }
   };
 
-module.exports = { userRegistration, userLogin, sendResetCode, verifyResetCode, resetPassword ,updateProfile, getalldata,searchUsers  };
+module.exports = {updateUser, userRegistration, userLogin, sendResetCode, verifyResetCode, resetPassword , getalldata,searchUsers  };
