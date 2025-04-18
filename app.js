@@ -22,11 +22,13 @@ const userRouter = require("./routes/userRoutes");
 const flashcardRoutes = require("./routes/flashcardRoutes");
 const todoRoutes = require("./routes/todoRoutes");
 const messageRoutes= require("./routes/messageRoutes");
+const quizRoutes= require("./routes/quizRoutes");
 
 app.use("/user", userRouter);
 app.use("/user", flashcardRoutes);
 app.use("/user", todoRoutes);
 app.use("/user",messageRoutes);
+app.use("/quiz",quizRoutes);
 
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 

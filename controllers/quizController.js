@@ -95,13 +95,19 @@ const createQuiz = async (req, res) => {
         question: q.question,
         options: q.options,
         correctAnswer: q.correctAnswer,
-        // score:q.score,
         topic,
         createdBy: userId,
       }))
     );
 
-    res.status(201).json({ message: 'Quiz created successfully!', quiz: savedQuiz });
+    const formattedQuiz = savedQuiz.map(q => ({
+      _id: q._id,
+      question: q.question,
+      options: q.options,
+      correctAnswer: q.correctAnswer,
+    }));
+
+    res.status(201).json({ message: 'Quiz created successfully!', quiz: formattedQuiz });
   } catch (error) {
     console.error('❌ Quiz creation error:', error);
     res.status(500).json({ error: 'Error creating quiz: ' + error.message });
@@ -116,49 +122,59 @@ const submitQuiz = async (req, res) => {
       return res.status(400).json({ error: 'Mismatched quiz and answers.' });
     }
 
-    const questions = await Quiz.find({
-      _id: { $in: quizId },
-      createdBy: userId,
-    });
+    const quizDocs = await Quiz.find({ _id: { $in: quizId }, createdBy: userId });
 
-    if (!questions || questions.length === 0) {
+    if (!quizDocs || quizDocs.length === 0) {
       return res.status(404).json({ error: 'Quiz questions not found.' });
     }
+
+    const quizMap = new Map();
+    quizDocs.forEach(q => quizMap.set(q._id.toString(), q));
 
     let correctCount = 0;
     const results = [];
 
-    for (let i = 0; i < questions.length; i++) {
-      const q = questions[i];
-      const userAnswer = answers[i].answer;
-      const isCorrect = userAnswer === q.correctAnswer;
+    for (let i = 0; i < quizId.length; i++) {
+      const id = quizId[i];
+      const answerObj = answers[i];
+      const quiz = quizMap.get(id);
 
-      if (isCorrect) correctCount++;
-
-      results.push({
-        question: q.question,
-        options: q.options,
-        correctAnswer: q.correctAnswer,
-        userAnswer,
-        isCorrect,
-      });
+      if (quiz && quiz.correctAnswer === answerObj.userAnswer) {
+        correctCount++;
+        results.push({
+          question: quiz.question,
+          correctAnswer: quiz.correctAnswer,
+          userAnswer: answerObj.userAnswer,
+          isCorrect: true,
+        });
+      } else {
+        results.push({
+          question: quiz.question,
+          correctAnswer: quiz.correctAnswer,
+          userAnswer: answerObj.userAnswer,
+          isCorrect: false,
+        });
+      }
     }
 
-    const score = correctCount;
-    const timeTaken = Math.floor((Date.now() - req.startTime || Date.now()) / 1000);
-
-    // 🔥 No saving submission results to DB
-    res.status(200).json({
-      message: 'Quiz submitted successfully.',
-      score,
-      timeTaken,
+    // Save result and return
+    const submission = new QuizHistory({
+      userId,
+      quizId,
       results,
+      score: correctCount,
+      timestamp: Date.now(),
     });
+
+    await submission.save();
+    return res.status(200).json({ message: 'Quiz submitted successfully.' });
   } catch (error) {
-    console.error('❌ Error submitting quiz:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    console.error("Error submitting quiz:", error);
+    res.status(500).json({ error: 'Server error' });
   }
 };
+
+
 
 const getQuizHistory = async (req, res) => {
   try {
