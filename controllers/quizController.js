@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 const { extractTextFromFile } = require('../utils/fileExtractor');
 const Quiz = require('../model/quiz');
 const Flashcard = require('../model/flashcard');
+// const Progress = require('../model/progress');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 require('dotenv').config();
 
@@ -90,24 +91,13 @@ const createQuiz = async (req, res) => {
         return res.status(400).json({ error: 'Invalid source type.' });
     }
 
-    const savedQuiz = await Quiz.insertMany(
-      questions.map(q => ({
-        question: q.question,
-        options: q.options,
-        correctAnswer: q.correctAnswer,
-        topic,
-        createdBy: userId,
-      }))
-    );
-
-    const formattedQuiz = savedQuiz.map(q => ({
-      _id: q._id,
-      question: q.question,
-      options: q.options,
-      correctAnswer: q.correctAnswer,
+    const savedQuiz = questions.map(q => ({
+      ...q,
+      topic,
+      createdBy: userId
     }));
 
-    res.status(201).json({ message: 'Quiz created successfully!', quiz: formattedQuiz });
+    res.status(201).json({ message: 'Quiz created successfully!', quiz: savedQuiz });
   } catch (error) {
     console.error('❌ Quiz creation error:', error);
     res.status(500).json({ error: 'Error creating quiz: ' + error.message });
@@ -116,94 +106,106 @@ const createQuiz = async (req, res) => {
 
 const submitQuiz = async (req, res) => {
   try {
-    const { userId, quizId, answers } = req.body;
+    const { quizId, answers, timeTaken } = req.body; // ✅ receive timeTaken
+    const userId = req.user._id;
 
-    if (!quizId || !answers || quizId.length !== answers.length) {
-      return res.status(400).json({ error: 'Mismatched quiz and answers.' });
+    if (!answers || !Array.isArray(answers)) {
+      return res.status(400).json({ error: 'Invalid answers data.' });
     }
-
-    const quizDocs = await Quiz.find({ _id: { $in: quizId }, createdBy: userId });
-
-    if (!quizDocs || quizDocs.length === 0) {
-      return res.status(404).json({ error: 'Quiz questions not found.' });
-    }
-
-    const quizMap = new Map();
-    quizDocs.forEach(q => quizMap.set(q._id.toString(), q));
 
     let correctCount = 0;
-    const results = [];
+    const detailedQuestions = answers.map((q) => {
+      const isCorrect = q.userAnswer === q.correctAnswer;
+      if (isCorrect) correctCount++;
 
-    for (let i = 0; i < quizId.length; i++) {
-      const id = quizId[i];
-      const answerObj = answers[i];
-      const quiz = quizMap.get(id);
+      return {
+        question: q.question,
+        options: q.options,
+        correctAnswer: q.correctAnswer,
+        userAnswer: q.userAnswer,
+        isCorrect,
+      };
+    });
 
-      if (quiz && quiz.correctAnswer === answerObj.userAnswer) {
-        correctCount++;
-        results.push({
-          question: quiz.question,
-          correctAnswer: quiz.correctAnswer,
-          userAnswer: answerObj.userAnswer,
-          isCorrect: true,
-        });
-      } else {
-        results.push({
-          question: quiz.question,
-          correctAnswer: quiz.correctAnswer,
-          userAnswer: answerObj.userAnswer,
-          isCorrect: false,
-        });
-      }
-    }
+    const score = correctCount;
 
-    // Save result and return
-    const submission = new QuizHistory({
-      userId,
-      quizId,
-      results,
-      score: correctCount,
-      timestamp: Date.now(),
+    const submission = new Quiz({
+      createdBy: userId,
+      isSubmission: true,
+      takenAt: new Date(),
+      score,
+      timeTaken, // ✅ use frontend time
+      userAnswers: answers.map(q => q.userAnswer),
+      questions: answers.map(q => ({
+        question: q.question,
+        options: q.options,
+        correctAnswer: q.correctAnswer,
+      })),
     });
 
     await submission.save();
-    return res.status(200).json({ message: 'Quiz submitted successfully.' });
+
+    // await Progress.findOneAndUpdate(
+    //   { userId },
+    //   {
+    //     $inc: {
+    //       quizzesTaken: 1,
+    //       totalQuizScore: score,
+    //       totalTimeSpent: timeTaken
+    //     },
+    //     $set: { lastUpdated: new Date() },
+    //   },
+    //   { upsert: true }
+    // );
+
+    res.status(200).json({
+      message: "Quiz submitted!",
+      submissionId: submission._id,
+      score,
+      timeTaken,
+      totalQuestions: answers.length,
+      results: detailedQuestions,
+    });
+
   } catch (error) {
-    console.error("Error submitting quiz:", error);
-    res.status(500).json({ error: 'Server error' });
+    console.error('❌ Error submitting quiz:', error);
+    res.status(500).json({ error: 'Error submitting quiz: ' + error.message });
   }
 };
-
-
 
 const getQuizHistory = async (req, res) => {
   try {
     const userId = req.user._id;
-    const quizzes = await Quiz.find({ createdBy: userId }).sort({ createdAt: -1 });
+    const quizzes = await Quiz.find({ createdBy: userId });
 
-    if (!quizzes.length) {
+    if (quizzes.length === 0) {
       return res.status(200).json({ message: "No quizzes found for this user." });
     }
-    console.log('quizzes',quizzes);
-    // 
-    const history = quizzes.map(q => ({
-      quizId: q._id,
-      topic: q.topic,
-      question: q.question,
-      options: q.options,
-      score: q.score,
-      // ⛔ Do NOT expose correctAnswer/userAnswer/score/timeTaken
+
+    const quizHistory = quizzes.map(quiz => ({
+      quizId: quiz._id,
+      score: quiz.score,
+      timeTaken: quiz.timeTaken,
+      takenAt: quiz.takenAt,
+      question: quiz.question,
+      options: quiz.options,
+      correctAnswer: quiz.correctAnswer,
+      userAnswer: quiz.userAnswer,
+      isCorrect: quiz.userAnswer === quiz.correctAnswer,
     }));
 
     res.status(200).json({
-      message: 'Quiz generation history fetched!',
-      quizzes: history,
+      message: 'Grouped quiz history fetched!',
+      quizzes: quizHistory,
     });
   } catch (error) {
     console.error('❌ Error fetching quiz history:', error);
     res.status(500).json({ error: 'History error: ' + error.message });
   }
 };
+
+
+
 
 module.exports = {
   createQuiz,
