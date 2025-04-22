@@ -31,6 +31,7 @@
     "path": "^0.12.7",
     "pdf-parse": "^1.1.1",
     "pptx2json": "^0.0.10",
+    "recharts": "^2.15.3",
     "socket.io": "^4.8.1",
     "validator": "^13.12.0"
   }

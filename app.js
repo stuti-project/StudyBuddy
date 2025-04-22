@@ -24,6 +24,11 @@ const todoRoutes = require("./routes/todoRoutes");
 const messageRoutes= require("./routes/messageRoutes");
 const quizRoutes= require("./routes/quizRoutes");
 
+const progressRoutes = require("./routes/progressRoutes");
+const leaderboardRoutes = require("./routes/leaderBoardRoutes")
+app.use('/', leaderboardRoutes)
+app.use("/progress", progressRoutes);
+
 
 
 app.use("/user", userRouter);

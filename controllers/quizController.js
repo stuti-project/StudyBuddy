@@ -2,7 +2,7 @@ const mongoose = require('mongoose');
 const { extractTextFromFile } = require('../utils/fileExtractor');
 const Quiz = require('../model/quiz');
 const Flashcard = require('../model/flashcard');
-// const Progress = require('../model/progress');
+const Progress = require('../model/progress');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 require('dotenv').config();
 
@@ -106,7 +106,7 @@ const createQuiz = async (req, res) => {
 
 const submitQuiz = async (req, res) => {
   try {
-    const { quizId, answers, timeTaken } = req.body; // ✅ receive timeTaken
+    const { quizId, answers, timeTaken } = req.body;
     const userId = req.user._id;
 
     if (!answers || !Array.isArray(answers)) {
@@ -117,7 +117,6 @@ const submitQuiz = async (req, res) => {
     const detailedQuestions = answers.map((q) => {
       const isCorrect = q.userAnswer === q.correctAnswer;
       if (isCorrect) correctCount++;
-
       return {
         question: q.question,
         options: q.options,
@@ -134,7 +133,7 @@ const submitQuiz = async (req, res) => {
       isSubmission: true,
       takenAt: new Date(),
       score,
-      timeTaken, // ✅ use frontend time
+      timeTaken,
       userAnswers: answers.map(q => q.userAnswer),
       questions: answers.map(q => ({
         question: q.question,
@@ -145,18 +144,8 @@ const submitQuiz = async (req, res) => {
 
     await submission.save();
 
-    // await Progress.findOneAndUpdate(
-    //   { userId },
-    //   {
-    //     $inc: {
-    //       quizzesTaken: 1,
-    //       totalQuizScore: score,
-    //       totalTimeSpent: timeTaken
-    //     },
-    //     $set: { lastUpdated: new Date() },
-    //   },
-    //   { upsert: true }
-    // );
+    // ✅ Automatically track quiz progress
+    await updateProgressAfterQuiz(userId, score, timeTaken);
 
     res.status(200).json({
       message: "Quiz submitted!",
@@ -172,6 +161,26 @@ const submitQuiz = async (req, res) => {
     res.status(500).json({ error: 'Error submitting quiz: ' + error.message });
   }
 };
+
+const updateProgressAfterQuiz = async (userId, score, timeTaken) => {
+  try {
+    await Progress.findOneAndUpdate(
+      { userId },
+      {
+        $inc: {
+          quizzesTaken: 1,
+          totalQuizScore: score,
+          totalTimeSpent: timeTaken
+        },
+        $set: { lastUpdated: new Date() }
+      },
+      { upsert: true }
+    );
+  } catch (err) {
+    console.error("Failed to update quiz progress:", err.message);
+  }
+};
+
 
 const getQuizHistory = async (req, res) => {
   try {
@@ -212,4 +221,5 @@ module.exports = {
   submitQuiz,
   generateQuizFromFlashcards,
   getQuizHistory,
+  updateProgressAfterQuiz,
 };
