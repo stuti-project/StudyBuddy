@@ -1,4 +1,4 @@
-const Users = require("../model/reg"); // Corrected model name
+const Users = require("../model/reg");
 const Progress = require("../model/progress");
 const QuizHistory = require("../model/quiz");
 
@@ -21,30 +21,40 @@ module.exports.getLeaderboard = async (req, res) => {
       }
     });
 
-    // Fetch progress and populate user info
-    const progressData = await Progress.find({}).populate("userId", "UserName Email");
+    // Get all users
+    const allUsers = await Users.find({}, "_id UserName Email");
 
-    const leaderboard = progressData
-      .filter(p => p.userId)
-      .map(progress => {
-        const user = progress.userId;
+    // Get all progress records
+    const allProgress = await Progress.find({});
 
-        const flashcardScore = progress.flashcardsCompleted || 0;
-        const quizScore = quizMap[user._id.toString()] || 0;
+    const progressMap = {};
+    allProgress.forEach(progress => {
+      if (progress.userId) {
+        progressMap[progress.userId.toString()] = progress.flashcardsCompleted || 0;
+      }
+    });
 
-        return {
-          user: {
-            name: user.UserName || "Unknown",     // changed to `name` for frontend
-            email: user.Email || "N/A"
-          },
-          flashcardScore,
-          quizScore,
-          totalScore: flashcardScore + quizScore
-        };
-      });
+    // Build the leaderboard from all users
+    const leaderboard = allUsers.map(user => {
+      const userIdStr = user._id.toString();
+      const flashcardScore = progressMap[userIdStr] || 0;
+      const quizScore = quizMap[userIdStr] || 0;
 
+      return {
+        user: {
+          name: user.UserName || "Unknown",
+          email: user.Email || "N/A"
+        },
+        flashcardScore,
+        quizScore,
+        totalScore: flashcardScore + quizScore
+      };
+    });
+
+    // Sort by total score in descending order
     leaderboard.sort((a, b) => b.totalScore - a.totalScore);
 
+    // Return top 10 (or fewer if less than 10 users)
     res.json({ leaderboard: leaderboard.slice(0, 10) });
 
   } catch (error) {
