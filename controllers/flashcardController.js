@@ -7,11 +7,6 @@ const { GoogleGenerativeAI } = require("@google/generative-ai");
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_FLASHCARD_KEY);
 const upload = multer({ dest: "uploads/" });
 
-// -------------------- Utility Functions -------------------- //
-
-/**
- * Extract text from a PDF file
- */
 async function extractTextFromFile(filePath) {
     try {
         const dataBuffer = fs.readFileSync(filePath);
@@ -22,17 +17,10 @@ async function extractTextFromFile(filePath) {
     }
 }
 
-/**
- * Generate image from image description using AI (mocked or implement your own)
- */
 async function generateImage(description) {
-    // TODO: Implement image generation logic if needed
     return `https://dummyimage.com/600x400/000/fff&text=${encodeURIComponent(description)}`;
 }
 
-/**
- * Extract Q&A pairs using Gemini AI
- */
 async function extractQnAUsingAI(text, topic) {
     try {
         const model = genAI.getGenerativeModel({ model: "gemini-1.5-pro-latest" });
@@ -70,7 +58,6 @@ Text: ${text}`;
     }
 }
 
-
 async function updateProgressAfterFlashcards(userId, count = 1) {
     try {
         await Progress.findOneAndUpdate(
@@ -86,21 +73,19 @@ async function updateProgressAfterFlashcards(userId, count = 1) {
     }
 }
 
-// Mark a flashcard as reviewed and update the progress
 async function reviewFlashcard(userId, flashcardId) {
     try {
         const flashcard = await Flashcard.findById(flashcardId);
         if (flashcard && !flashcard.reviewed) {
             flashcard.reviewed = true;
             await flashcard.save();
-            await updateProgressAfterFlashcards(userId, 1);  // Increment reviewed count by 1
+            await updateProgressAfterFlashcards(userId, 1);  
         }
     } catch (err) {
         console.error("Failed to review flashcard:", err.message);
     }
 }
 
-// Group flashcards by topic
 async function groupFlashcardsByTopic(filter = {}) {
     const flashcards = await Flashcard.find(filter);
     const grouped = {};
@@ -111,166 +96,228 @@ async function groupFlashcardsByTopic(filter = {}) {
     return grouped;
 }
 
-// -------------------- Controller Exports -------------------- //
-
 module.exports.createFlashcard = async (req, res) => {
-    const userId = req.user._id;
-    let generatedFlashcards = [];
+  const userId = req.user._id;
 
-    try {
-        if (req.body.flashcards && Array.isArray(req.body.flashcards)) {
-            // Manual submission
-            const flashcards = req.body.flashcards.map(card => ({
-                topic: req.body.topic,
-                notes: req.body.notes,
-                question: card.question,
-                answer: card.answer,
-                image: card.image || null,
-                createdBy: userId,
-                reviewed: false, // New flashcards start as not reviewed
-            }));
+  try {
+    // 1. Manual flashcards submission (Save to DB)
+    if (req.body.flashcards && Array.isArray(req.body.flashcards)) {
+      const flashcardDoc = new Flashcard({
+        topic: req.body.topic,
+        createdBy: userId,
+        cards: req.body.flashcards.map(card => ({
+          question: card.question,
+          answer: card.answer,
+          image: card.image || "",
+          notes: card.notes || ""
+        }))
+      });
 
-            const saved = await Flashcard.insertMany(flashcards);
-            await updateProgressAfterFlashcards(userId, saved.length);
+      const saved = await flashcardDoc.save();
+      await updateProgressAfterFlashcards(userId, saved.cards.length);
 
-            return res.status(201).json({
-                message: `${saved.length} flashcards created successfully!`,
-                flashcards: saved,
-            });
-        }
-
-        if (req.body.text) {
-            // AI-generated from text
-            if (!req.body.text.trim()) {
-                return res.status(400).json({ error: "Text is empty." });
-            }
-
-            generatedFlashcards = await extractQnAUsingAI(req.body.text, req.body.topic);
-            if (!Array.isArray(generatedFlashcards) || generatedFlashcards.length < 2) {
-                return res.status(400).json({ error: "AI did not generate enough flashcards." });
-            }
-
-            return res.status(201).json({ flashcards: generatedFlashcards });
-        }
-
-        if (req.file) {
-            // PDF Upload
-            const filePath = req.file.path;
-            const fileType = req.file.mimetype;
-
-            if (fileType !== "application/pdf") {
-                return res.status(400).json({ error: "Only PDF files are allowed." });
-            }
-
-            const extractedText = await extractTextFromFile(filePath);
-            fs.unlinkSync(filePath);
-
-            if (!extractedText) {
-                return res.status(400).json({ error: "Failed to extract text from file." });
-            }
-
-            generatedFlashcards = await extractQnAUsingAI(extractedText, req.body.topic);
-            if (!Array.isArray(generatedFlashcards) || generatedFlashcards.length < 2) {
-                return res.status(400).json({ error: "AI did not generate enough flashcards." });
-            }
-
-            const saved = await Flashcard.insertMany(
-                generatedFlashcards.map(card => ({
-                    topic: req.body.topic,
-                    notes: req.body.notes,
-                    question: card.question,
-                    answer: card.answer,
-                    image: card.image || null,
-                    createdBy: userId,
-                    reviewed: false, // New flashcards start as not reviewed
-                }))
-            );
-
-            await updateProgressAfterFlashcards(userId, saved.length);
-
-            return res.status(201).json({
-                message: `${saved.length} AI-generated flashcards created!`,
-                flashcards: saved,
-            });
-        }
-
-        return res.status(400).json({ error: "No valid data provided for flashcards." });
-    } catch (error) {
-        console.error("Create Flashcard Error:", error);
-        res.status(500).json({ error: error.message });
+      return res.status(201).json({
+        message: `${saved.cards.length} flashcards created successfully!`,
+        flashcards: saved,
+      });
     }
+
+    // 2. AI-generated flashcards from pasted text (Generate only, do NOT save)
+    if (req.body.text) {
+      if (!req.body.text.trim()) {
+        return res.status(400).json({ error: 'Text is empty.' });
+      }
+
+      const topic = req.body.topic || "General";
+      const generatedFlashcards = await extractQnAUsingAI(req.body.text, topic);
+
+      if (!Array.isArray(generatedFlashcards) || generatedFlashcards.length < 2) {
+        return res.status(400).json({ error: 'AI did not generate enough flashcards.' });
+      }
+
+      // ✅ Return generated cards without saving
+      return res.status(200).json({
+        message: `${generatedFlashcards.length} AI-generated flashcards ready for review.`,
+        flashcards: generatedFlashcards,
+      });
+    }
+
+    // 3. AI-generated flashcards from file upload (Generate only, do NOT save)
+    if (req.file) {
+      const filePath = req.file.path;
+      const fileType = req.file.mimetype;
+
+      if (fileType !== 'application/pdf') {
+        fs.unlinkSync(filePath);
+        return res.status(400).json({ error: 'Only PDF files are allowed.' });
+      }
+
+      const extractedText = await extractTextFromFile(filePath);
+      fs.unlinkSync(filePath);
+
+      if (!extractedText) {
+        return res.status(400).json({ error: 'Failed to extract text from file.' });
+      }
+
+      const generatedFlashcards = await extractQnAUsingAI(extractedText, req.body.topic || 'General');
+
+      if (!Array.isArray(generatedFlashcards) || generatedFlashcards.length < 2) {
+        return res.status(400).json({ error: 'AI did not generate enough flashcards.' });
+      }
+
+      // ✅ Return generated cards without saving
+      return res.status(200).json({
+        message: `${generatedFlashcards.length} AI-generated flashcards ready for review.`,
+        flashcards: generatedFlashcards,
+      });
+    }
+
+    // If no valid input provided
+    return res.status(400).json({ error: 'No valid data provided for flashcards.' });
+
+  } catch (error) {
+    console.error("Create Flashcard Error:", error);
+    res.status(500).json({ error: error.message });
+  }
 };
 
-// Mark a flashcard as reviewed (called when user reviews the flashcard)
-// module.exports.reviewFlashcard = async (req, res) => {
-//     const userId = req.user._id;
-//     const { flashcardId } = req.params;
 
-//     try {
-//         await reviewFlashcard(userId, flashcardId);
-//         return res.status(200).json({ message: "Flashcard marked as reviewed." });
-//     } catch (err) {
-//         return res.status(500).json({ error: "Failed to mark flashcard as reviewed." });
-//     }
-// };
+  
 
+// flashcardController.js
+
+// Get all flashcards (optionally filtered by user ID and topic)
 module.exports.getFlashcards = async (req, res) => {
     const { id, topic } = req.query;
     const filter = {};
+  
     if (id) filter.createdBy = id;
     if (topic) filter.topic = { $regex: topic, $options: "i" };
-
+  
     try {
-        const flashcards = await Flashcard.find(filter);
-        if (!flashcards.length) {
-            return res.status(404).json({ message: "No flashcards found." });
-        }
-        res.json({ flashcards });
+      const flashcardDocs = await Flashcard.find(filter);
+  
+      if (!flashcardDocs.length) {
+        return res.status(404).json({ message: "No flashcards found." });
+      }
+  
+      const flashcards = flashcardDocs.flatMap(doc =>
+        doc.cards.map(card => ({
+          cardId: `${doc._id}_${doc.cards.indexOf(card)}`,
+          question: card.question,
+          answer: card.answer,
+          image: card.image,
+          notes: card.notes,
+          topic: doc.topic,
+          createdBy: doc.createdBy,
+          createdAt: doc.createdAt,
+          updatedAt: doc.updatedAt,
+        }))
+      );
+  
+      res.json({ flashcards });
     } catch (error) {
-        console.error("Fetch Flashcards Error:", error);
-        res.status(500).json({ error: "Server error" });
+      console.error("Fetch Flashcards Error:", error);
+      res.status(500).json({ error: "Server error" });
     }
-};
-
-module.exports.getAllFlashcardsGrouped = async (req, res) => {
+  };
+  
+  // Group all flashcards by topic (for "All Flashcards")
+  module.exports.getAllFlashcardsGrouped = async (req, res) => {
     try {
-        const grouped = await groupFlashcardsByTopic();
-        return res.status(200).json({ grouped });
+      const flashcardDocs = await Flashcard.find();
+  
+      const grouped = {};
+  
+      flashcardDocs.forEach(doc => {
+        grouped[doc._id] = doc.cards.map((card, index) => ({
+          cardId: `${doc._id}_${index}`,
+          question: card.question,
+          answer: card.answer,
+          image: card.image,
+          notes: card.notes,
+          topic: doc.topic,
+          createdBy: doc.createdBy,
+          createdAt: doc.createdAt,
+          updatedAt: doc.updatedAt,
+        }));
+      });
+  
+      res.status(200).json({ grouped });
     } catch (error) {
-        console.error("Error fetching all grouped flashcards:", error);
-        res.status(500).json({ error: "Server error" });
+      console.error("Error fetching grouped flashcards:", error);
+      res.status(500).json({ error: "Server error" });
     }
-};
-
-module.exports.getMyFlashcardsGrouped = async (req, res) => {
+  };
+  
+  // Group user's flashcards by topic (for "My Flashcards")
+  module.exports.getMyFlashcardsGrouped = async (req, res) => {
     const userId = req.user._id;
+  
     try {
-        const grouped = await groupFlashcardsByTopic({ createdBy: userId });
-        return res.status(200).json({ grouped });
+      const flashcardDocs = await Flashcard.find({ createdBy: userId });
+  
+      if (!flashcardDocs.length) {
+        return res.status(404).json({ message: "No flashcards found." });
+      }
+  
+      const grouped = {};
+  
+      flashcardDocs.forEach(doc => {
+        grouped[doc._id] = doc.cards.map((card, index) => ({
+          cardId: `${doc._id}_${index}`,
+          question: card.question,
+          answer: card.answer,
+          image: card.image,
+          notes: card.notes,
+          topic: doc.topic,
+          createdBy: doc.createdBy,
+          createdAt: doc.createdAt,
+          updatedAt: doc.updatedAt,
+        }));
+      });
+  
+      res.status(200).json({ grouped });
     } catch (error) {
-        console.error("Error fetching user's grouped flashcards:", error);
-        res.status(500).json({ error: "Server error" });
+      console.error("Error fetching user's grouped flashcards:", error);
+      res.status(500).json({ error: "Server error" });
     }
-};
-
-module.exports.getFlashcardsByTopic = async (req, res) => {
-    const { topic } = req.params;
+  };
+  
+  // Get flashcards of a specific document by its _id
+  module.exports.getFlashcardsById = async (req, res) => {
+    const { id } = req.params;
     const userId = req.user ? req.user._id : req.query.user;
-
-    const filter = { topic: { $regex: topic, $options: "i" } };
+  
+    const filter = { _id: id };
     if (userId) filter.createdBy = userId;
-
+  
     try {
-        const flashcards = await Flashcard.find(filter);
-        if (!flashcards.length) {
-            return res.status(404).json({ message: "No flashcards found for this topic." });
-        }
-        res.json({ flashcards });
+      const flashcardDoc = await Flashcard.findOne(filter);
+  
+      if (!flashcardDoc) {
+        return res.status(404).json({ message: "No flashcards found with this ID." });
+      }
+  
+      const flashcards = flashcardDoc.cards.map((card, index) => ({
+        cardId: `${flashcardDoc._id}_${index}`,
+        question: card.question,
+        answer: card.answer,
+        image: card.image,
+        notes: card.notes,
+        topic: flashcardDoc.topic,
+        createdBy: flashcardDoc.createdBy,
+        createdAt: flashcardDoc.createdAt,
+        updatedAt: flashcardDoc.updatedAt,
+      }));
+  
+      res.json({ flashcards });
     } catch (error) {
-        console.error("Error fetching flashcards by topic:", error);
-        res.status(500).json({ error: "Server error" });
+      console.error("Error fetching flashcards by ID:", error);
+      res.status(500).json({ error: "Server error" });
     }
-};
+  };
+  
 
 module.exports.updateFlashcard = async (req, res) => {
     const { flashcardId } = req.params;
