@@ -7,11 +7,16 @@ const server = http.createServer(app);
 
 const io = new Server(server, {
   cors: {
-    origin: ["http://localhost:7000"],
-  }
+    origin: [
+      "https://study-buddy-frontend-six.vercel.app",
+      "http://localhost:3000", // Update with correct dev URL
+    ],
+    methods: ["GET", "POST"],
+    credentials: true,
+  },
 });
 
-const userSocketMap = {}; // { userId: socketId }
+const userSocketMap = {};
 
 const getReceiverSocketId = (userId) => {
   return userSocketMap[userId] || null;
@@ -21,43 +26,37 @@ io.on("connection", (socket) => {
   console.log("User connected:", socket.id);
 
   const userId = socket.handshake.query.userId;
-  if (userId) userSocketMap[userId] = socket.id;
+  if (userId) {
+    userSocketMap[userId] = socket.id;
+    io.emit("getOnlineUsers", Object.keys(userSocketMap)); // Emit online users after mapping
+  }
 
-  io.emit("getOnlineUsers", Object.keys(userSocketMap));
-
-  // Call user - Emit incoming call to the receiver
   socket.on("call-user", ({ to, from, signal }) => {
     const socketId = getReceiverSocketId(to);
     if (socketId) {
-      io.to(socketId).emit("incoming-call", { from, signal });
+      try {
+        io.to(socketId).emit("incoming-call", { from, signal });
+      } catch (err) {
+        console.error("Error sending call:", err);
+      }
     }
   });
 
-  // Answer call - Emit call accepted signal to the caller
-  socket.on("answer-call", ({ to, signal }) => {
+  socket.on("audio-call-request", ({ to, from }) => {
     const socketId = getReceiverSocketId(to);
     if (socketId) {
-      io.to(socketId).emit("call-accepted", signal); // Signal is WebRTC data
+      io.to(socketId).emit("incoming-audio-call", { from });
     }
   });
 
-  // Audio call request - Emit audio call to receiver
-  socket.on("audio-call-request", ({ to, from }) => {
-    const targetSocketId = getReceiverSocketId(to);
-    if (targetSocketId) {
-      io.to(targetSocketId).emit("incoming-audio-call", { from });
-    }
-  });
-
-  // End call - Notify the other user that the call ended
   socket.on("end-call", ({ to }) => {
     const socketId = getReceiverSocketId(to);
     if (socketId) {
-      io.to(socketId).emit("call-ended");    
+      io.to(socketId).emit("call-ended");
     }
-    socket.emit("call-ended");              
+    socket.emit("call-ended");
   });
-  
+
   socket.on("reject-call", ({ to }) => {
     const socketId = getReceiverSocketId(to);
     if (socketId) {
