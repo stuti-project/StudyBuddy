@@ -7,7 +7,7 @@ const server = http.createServer(app);
 
 const io = new Server(server, {
   cors: {
-    origin: ["https://study-buddy-frontend-six.vercel.app/"],
+    origin: ["http://localhost:7000"],
   }
 });
 
