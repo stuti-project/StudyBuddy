@@ -4,7 +4,7 @@ const express = require("express");
 const cors = require("cors");
 const { app, server } = require("./database/socket");
 const path = require('path')
-
+console.log("hello");
 app.use(
     cors({
       origin: "*", 

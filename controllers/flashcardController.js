@@ -289,8 +289,9 @@ module.exports.getFlashcards = async (req, res) => {
     const { id } = req.params;
     const userId = req.user ? req.user._id : req.query.user;
   
+    console.log("Fetching flashcards for ID:", id, "User ID:", userId);
     const filter = { _id: id };
-    if (userId) filter.createdBy = userId;
+    // if (userId) filter.createdBy = userId;
   
     try {
       const flashcardDoc = await Flashcard.findOne(filter);

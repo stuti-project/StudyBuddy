@@ -50,6 +50,12 @@ router.delete(
   authMiddleware,
   flashcardController.deleteFlashcard
 );
+//   '/flashcards/:flashcardId',
+//   authMiddleware,
+//   flashcardController.deleteFlashcard
+// );
+
+
 
 router.get(
   '/flashcards',
