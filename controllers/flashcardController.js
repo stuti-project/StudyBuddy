@@ -23,7 +23,7 @@ async function generateImage(description) {
 
 async function extractQnAUsingAI(text, topic) {
     try {
-        const model = genAI.getGenerativeModel({ model: "gemini-1.5-pro-latest" });
+      const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
         const prompt = `Extract at least 5 question-answer pairs from the following study material. 
 If an image is relevant to better understanding, provide a short image description.
